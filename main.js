@@ -95,7 +95,9 @@ function normalizePaths(inputPaths) {
 
 /**
  * 최상위 경로들(파일 또는 폴더)을 하나의 zip으로 압축한다.
- * 각 항목은 zip 안에서 자신의 basename을 이름으로 갖는 최상위 엔트리가 된다.
+ * 여러 항목을 함께 압축할 때는 서로 이름이 겹치지 않도록 각자의 basename을 최상위 엔트리로 둔다.
+ * 반면 폴더 하나만 단독으로 압축할 때는 그 폴더 이름으로 한 번 더 감싸지 않고,
+ * 폴더 안의 내용물을 바로 zip 최상위에 풀어 넣는다 (압축 풀었을 때 폴더가 한 겹 더 생기는 것을 방지).
  * (파일명에 비ASCII 문자가 있으면 archiver가 자동으로 UTF-8 플래그(General Purpose Bit 11)를 세운다)
  *
  * @param {string[]} sourcePaths
@@ -113,11 +115,13 @@ function createZipArchive(sourcePaths, outputZipPath) {
 
     archive.pipe(output);
 
+    const isSingleFolder = sourcePaths.length === 1 && fs.lstatSync(sourcePaths[0]).isDirectory();
+
     for (const sourcePath of sourcePaths) {
       const stat = fs.lstatSync(sourcePath);
       const name = path.basename(sourcePath);
       if (stat.isDirectory()) {
-        archive.directory(sourcePath, name);
+        archive.directory(sourcePath, isSingleFolder ? false : name);
       } else {
         archive.file(sourcePath, { name });
       }
@@ -202,12 +206,10 @@ if (app) {
     }
 
     const firstDir = path.dirname(successes[0].finalPath);
-    // 압축 대상 파일과 이름이 겹치지 않도록 "(압축)" 접미사를 붙인다.
-    // (예: "문서.zip"을 압축하면 기본 제안값이 "문서.zip"이 되어 원본을 덮어쓸 뻔한 사고가 있었음)
+    // 확장자가 .zip으로 붙기 때문에 이름에 별도로 "(압축)" 같은 표시는 붙이지 않는다.
+    // 압축 대상과 저장 경로가 실제로 같아지는 위험한 경우는 findOutputCollision이 별도로 막아준다.
     const suggestedName =
-      successes.length === 1
-        ? `${path.parse(successes[0].finalPath).name} (압축).zip`
-        : '압축.zip';
+      successes.length === 1 ? `${path.parse(successes[0].finalPath).name}.zip` : '압축.zip';
 
     const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
       title: '압축 파일 저장',
