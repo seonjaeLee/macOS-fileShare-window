@@ -6,7 +6,8 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test:normalize": "node main.js"
+    "test:normalize": "node main.js",
+    "dist": "./build-app.sh"
   },
   "devDependencies": {
     "electron": "^43.0.0"

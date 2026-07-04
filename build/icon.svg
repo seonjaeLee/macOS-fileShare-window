@@ -1,0 +1,43 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5AA7F0"/>
+      <stop offset="100%" stop-color="#1E5FB8"/>
+    </linearGradient>
+    <linearGradient id="docShadow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- macOS 스타일 둥근 사각형(스퀴클) 배경 -->
+  <rect x="0" y="0" width="1024" height="1024" rx="230" ry="230" fill="url(#bg)"/>
+
+  <!-- 문서(파일) 카드, 오른쪽 위 모서리 접힌 형태 -->
+  <g>
+    <path d="
+      M 272 190
+      L 632 190
+      L 752 310
+      L 752 834
+      Q 752 860 726 860
+      L 272 860
+      Q 246 860 246 834
+      L 246 216
+      Q 246 190 272 190
+      Z"
+      fill="#FFFFFF"/>
+    <!-- 접힌 모서리 -->
+    <path d="M 632 190 L 632 290 Q 632 310 652 310 L 752 310 Z" fill="#D8E9FC"/>
+  </g>
+
+  <!-- 중앙의 한글 자소분리 -> 정상 표현: 흐릿한 자소분리 글자에서 또렷한 '가'로 -->
+  <text x="499" y="620" font-family="-apple-system, 'Apple SD Gothic Neo', 'AppleGothic', sans-serif"
+        font-size="330" font-weight="700" fill="#1E5FB8" text-anchor="middle">가</text>
+
+  <!-- 오른쪽 아래 체크 배지: 정리/수정 완료 표시 -->
+  <circle cx="792" cy="792" r="118" fill="#33C759"/>
+  <circle cx="792" cy="792" r="118" fill="none" stroke="#FFFFFF" stroke-width="14"/>
+  <path d="M 738 795 L 776 833 L 850 748" fill="none" stroke="#FFFFFF" stroke-width="34"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
