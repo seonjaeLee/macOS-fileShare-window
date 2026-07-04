@@ -64,8 +64,33 @@
     직접 재현은 안 됐지만, 핵심 로직(existsSync 판별 + inode 비교, renameSync 덮어쓰기 동작)은
     개별적으로 검증함.
 
-### 2단계 — 예정
-`preload.js` 작성 + IPC 연결 (contextIsolation 유지, `webUtils.getPathForFile` 사용).
+### 2단계 — 완료 (2026-07-04)
+- [preload.js](preload.js) 작성: `contextBridge.exposeInMainWorld('api', { getPathForFile, normalizePaths })`.
+  - `getPathForFile`: Electron 32+ 는 `webUtils.getPathForFile(file)` 사용, 그보다 낮은 버전은
+    `file.path` 폴백.
+  - `normalizePaths`: `ipcRenderer.invoke('normalize-paths', paths)`.
+- [main.js](main.js)에 Electron 부트스트랩 추가.
+  - `require('electron')`을 파일 최상단에서 구조분해했는데, `node main.js`로 순수 node 실행 시
+    이 패키지는 바이너리 경로 문자열을 반환하므로 `app`/`BrowserWindow`/`ipcMain`이 전부
+    `undefined`가 됨 → `if (app) { ... }`로 감싸서 Electron 런타임에서만 부트스트랩이 동작하도록 함.
+  - 1단계에서 만든 콘솔 테스트 블록(`require.main === module`)이 `electron .`으로 실행될 때도
+    걸려서 즉시 `process.exit(0)`으로 앱이 죽어버리는 버그 가능성을 발견 → 조건에
+    `!process.versions.electron`을 추가해서 순수 node 실행일 때만 CLI 테스트가 돌게 수정.
+  - `ipcMain.handle('normalize-paths', ...)`로 1단계의 `normalizePaths` 함수를 그대로 연결.
+- [index.html](index.html): 3단계 전까지 쓰는 **임시** IPC 확인용 화면. 경로를 입력하고 버튼을 누르면
+  `window.api.normalizePaths([path])`를 호출해 결과 JSON을 화면에 그대로 출력. (실제 드래그드롭
+  다크모드 UI는 3단계에서 이 파일을 교체하며 만듦)
+- `package.json`의 electron 버전을 최신 안정판인 `^43.0.0`으로 맞춤 (`npm audit`에서
+  32.x에 여러 known advisory가 있었고, `webUtils.getPathForFile`은 43에서도 그대로 지원됨).
+  Node 20.20.2에서 electron 43 설치 시 `EBADENGINE` 경고(권장 Node ≥22.12)가 뜨지만 설치/구동
+  자체는 정상 동작 확인함.
+- **검수**: `node --check`로 두 파일 문법 확인, `electron .`을 백그라운드로 직접 띄워서
+  main/renderer/gpu-process/network-utility 프로세스가 전부 정상 기동하고 에러 로그 없이 뜨는 것
+  확인 후 종료함 (OS 권한 문제로 osascript 창 목록 조회는 안 됐지만 프로세스 트리로 크래시 없음을
+  확인).
+
+### 3단계 — 예정
+드래그드롭 UI, 다크 모드, 진행 상태 텍스트. (지금의 임시 `index.html`을 실제 UI로 교체)
 
 ### 3단계 — 예정
 드래그드롭 UI, 다크 모드, 진행 상태 텍스트.

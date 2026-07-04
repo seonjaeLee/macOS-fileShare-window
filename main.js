@@ -2,6 +2,9 @@
 
 const fs = require('fs');
 const path = require('path');
+// 순수 node로 (node main.js) 실행될 때는 'electron' 패키지가 바이너리 경로 문자열을 반환하므로
+// 아래 구조분해는 전부 undefined가 되고, Electron으로 (electron .) 실행될 때만 실제 모듈이 온다.
+const { app, BrowserWindow, ipcMain } = require('electron');
 
 /**
  * 파일/폴더 하나의 basename만 NFC로 정규화한다.
@@ -91,9 +94,38 @@ function normalizePaths(inputPaths) {
 
 module.exports = { normalizeOneName, normalizeRecursiveSync, normalizePaths };
 
-// ---- 콘솔 테스트용 (IPC 없이 단독 실행) ----
+// ---- Electron 부트스트랩 (electron . 으로 실행될 때만 동작) ----
+function createWindow() {
+  const win = new BrowserWindow({
+    width: 900,
+    height: 650,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  win.loadFile('index.html');
+}
+
+if (app) {
+  ipcMain.handle('normalize-paths', (event, inputPaths) => normalizePaths(inputPaths));
+
+  app.whenReady().then(() => {
+    createWindow();
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  });
+
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit();
+  });
+}
+
+// ---- 콘솔 테스트용 (IPC 없이 단독 실행: node main.js ...) ----
 // 사용법: node main.js <경로1> [<경로2> ...]
-if (require.main === module) {
+if (require.main === module && !process.versions.electron) {
   const args = process.argv.slice(2);
 
   if (args.length === 0) {
