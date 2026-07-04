@@ -1,0 +1,17 @@
+{
+  "name": "hangul-filename-fixer",
+  "version": "1.0.0",
+  "description": "맥에서 만든 한글 파일명을 윈도우 호환(NFC) 형태로 정규화하고 UTF-8 플래그가 있는 zip으로 압축하는 로컬 전용 Electron 앱",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test:normalize": "node main.js"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1"
+  }
+}
