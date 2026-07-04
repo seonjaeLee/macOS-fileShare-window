@@ -2,9 +2,10 @@
 
 const fs = require('fs');
 const path = require('path');
+const archiver = require('archiver');
 // 순수 node로 (node main.js) 실행될 때는 'electron' 패키지가 바이너리 경로 문자열을 반환하므로
 // 아래 구조분해는 전부 undefined가 되고, Electron으로 (electron .) 실행될 때만 실제 모듈이 온다.
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 
 /**
  * 파일/폴더 하나의 basename만 NFC로 정규화한다.
@@ -92,11 +93,47 @@ function normalizePaths(inputPaths) {
   return { successes, errors };
 }
 
-module.exports = { normalizeOneName, normalizeRecursiveSync, normalizePaths };
+/**
+ * 최상위 경로들(파일 또는 폴더)을 하나의 zip으로 압축한다.
+ * 각 항목은 zip 안에서 자신의 basename을 이름으로 갖는 최상위 엔트리가 된다.
+ * (파일명에 비ASCII 문자가 있으면 archiver가 자동으로 UTF-8 플래그(General Purpose Bit 11)를 세운다)
+ *
+ * @param {string[]} sourcePaths
+ * @param {string} outputZipPath
+ * @returns {Promise<void>}
+ */
+function createZipArchive(sourcePaths, outputZipPath) {
+  return new Promise((resolve, reject) => {
+    const output = fs.createWriteStream(outputZipPath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    output.on('close', () => resolve());
+    output.on('error', (err) => reject(err));
+    archive.on('error', (err) => reject(err));
+
+    archive.pipe(output);
+
+    for (const sourcePath of sourcePaths) {
+      const stat = fs.lstatSync(sourcePath);
+      const name = path.basename(sourcePath);
+      if (stat.isDirectory()) {
+        archive.directory(sourcePath, name);
+      } else {
+        archive.file(sourcePath, { name });
+      }
+    }
+
+    archive.finalize();
+  });
+}
+
+module.exports = { normalizeOneName, normalizeRecursiveSync, normalizePaths, createZipArchive };
 
 // ---- Electron 부트스트랩 (electron . 으로 실행될 때만 동작) ----
+let mainWindow = null;
+
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 900,
     height: 650,
     webPreferences: {
@@ -105,11 +142,47 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
-  win.loadFile('index.html');
+  mainWindow.loadFile('index.html');
 }
 
 if (app) {
   ipcMain.handle('normalize-paths', (event, inputPaths) => normalizePaths(inputPaths));
+
+  ipcMain.handle('compress-paths', async (event, inputPaths) => {
+    // 압축 전에 항상 먼저 NFC로 정규화한다.
+    const { successes, errors } = normalizePaths(inputPaths);
+
+    if (successes.length === 0) {
+      return { cancelled: false, savedTo: null, successes, errors };
+    }
+
+    const firstDir = path.dirname(successes[0].finalPath);
+    const suggestedName =
+      successes.length === 1
+        ? `${path.parse(successes[0].finalPath).name}.zip`
+        : '압축.zip';
+
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: '압축 파일 저장',
+      defaultPath: path.join(firstDir, suggestedName),
+      filters: [{ name: 'Zip', extensions: ['zip'] }],
+    });
+
+    if (canceled || !filePath) {
+      return { cancelled: true, savedTo: null, successes, errors };
+    }
+
+    try {
+      await createZipArchive(
+        successes.map((s) => s.finalPath),
+        filePath
+      );
+      return { cancelled: false, savedTo: filePath, successes, errors };
+    } catch (err) {
+      errors.push({ path: filePath, message: `압축 실패: ${err.message}` });
+      return { cancelled: false, savedTo: null, successes, errors };
+    }
+  });
 
   app.whenReady().then(() => {
     createWindow();

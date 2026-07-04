@@ -53,6 +53,7 @@ function renderFileList() {
   }
   const hasItems = currentPaths.length > 0;
   normalizeBtn.disabled = !hasItems;
+  zipBtn.disabled = !hasItems;
 }
 
 function clearStatus() {
@@ -65,6 +66,16 @@ function setStatus(text) {
 
 function setButtonsDisabled(disabled) {
   normalizeBtn.disabled = disabled || currentPaths.length === 0;
+  zipBtn.disabled = disabled || currentPaths.length === 0;
+}
+
+// 정규화(이름 변경)는 main 프로세스에서 실제로 파일을 rename하므로,
+// 화면이 들고 있는 currentPaths도 실제 최종 경로로 갱신해야 다음 조작(재정규화/압축)이
+// 존재하지 않는 예전 경로를 가리키지 않는다.
+function syncCurrentPathsWithResult(result) {
+  const originalToFinal = new Map(result.successes.map((s) => [s.originalPath, s.finalPath]));
+  currentPaths = currentPaths.map((p) => originalToFinal.get(p) ?? p);
+  renderFileList();
 }
 
 function renderNormalizeResult(result) {
@@ -87,6 +98,29 @@ function renderNormalizeResult(result) {
   setStatus(summary + lines.join('\n'));
 }
 
+function renderCompressResult(result) {
+  const { cancelled, savedTo, successes, errors } = result;
+
+  if (cancelled) {
+    setStatus('압축이 취소되었습니다 (저장 위치를 선택하지 않음).');
+    return;
+  }
+
+  const lines = [];
+  for (const s of successes) {
+    lines.push(`[포함] ${s.finalPath}${s.renamed.length > 0 ? ` (${s.renamed.length}개 항목 이름 변경됨)` : ''}`);
+  }
+  for (const e of errors) {
+    lines.push(`[실패] ${e.path}\n  → ${e.message}`);
+  }
+
+  const header = savedTo
+    ? `압축 완료: ${savedTo}\n\n`
+    : '압축 실패: 저장된 파일이 없습니다.\n\n';
+
+  setStatus(header + lines.join('\n'));
+}
+
 normalizeBtn.addEventListener('click', async () => {
   if (currentPaths.length === 0) return;
 
@@ -95,6 +129,7 @@ normalizeBtn.addEventListener('click', async () => {
 
   try {
     const result = await window.api.normalizePaths(currentPaths);
+    syncCurrentPathsWithResult(result);
     renderNormalizeResult(result);
   } catch (err) {
     setStatus(`에러 발생: ${err.message}`);
@@ -103,5 +138,19 @@ normalizeBtn.addEventListener('click', async () => {
   }
 });
 
-// 압축 기능은 4단계에서 연결 예정. 지금은 비활성화 상태로 둔다.
-zipBtn.disabled = true;
+zipBtn.addEventListener('click', async () => {
+  if (currentPaths.length === 0) return;
+
+  setButtonsDisabled(true);
+  setStatus('파일명 정리 후 압축 중...');
+
+  try {
+    const result = await window.api.compressPaths(currentPaths);
+    syncCurrentPathsWithResult(result);
+    renderCompressResult(result);
+  } catch (err) {
+    setStatus(`에러 발생: ${err.message}`);
+  } finally {
+    setButtonsDisabled(false);
+  }
+});

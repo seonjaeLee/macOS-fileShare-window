@@ -17,4 +17,5 @@ function getPathForFile(file) {
 contextBridge.exposeInMainWorld('api', {
   getPathForFile,
   normalizePaths: (paths) => ipcRenderer.invoke('normalize-paths', paths),
+  compressPaths: (paths) => ipcRenderer.invoke('compress-paths', paths),
 });

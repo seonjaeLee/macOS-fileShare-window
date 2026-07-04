@@ -111,6 +111,35 @@
   정상 기동하는 것을 확인 후 종료. (다만 macOS Finder에서 실제 파일을 드래그해서
   `webUtils.getPathForFile`이 진짜 절대경로를 돌려주는지는 자동화로 검증할 수 없어 사용자
   확인이 필요함)
+- **사용자 실기기 검증 (2026-07-04)**: 같은 파일(`디자인 시안 컨셉정의.md`)을 2단계에서 절대경로를
+  직접 타이핑해서 넣었을 때는 `renamed: []`(이미 NFC)였는데, 3단계에서 Finder로 실제
+  드래그해서 넣었을 때는 "1개 항목 이름 변경됨"이 나옴. 즉 Finder가 드래그드롭으로 넘겨주는
+  파일 경로 문자열 자체가 NFD였다는 뜻 → 배경에서 설명한 "macOS가 한글 파일명을 자소분리로
+  저장/전달"하는 현상이 실제로 재현되고, 우리 앱이 이를 정상적으로 감지해 NFC로 고쳤음을
+  실사용 환경에서 확인함.
 
-### 4단계 — 예정
-`archiver` 기반 zip 압축 (정규화 먼저 수행 후 압축). "정리해서 압축하기" 버튼 활성화.
+### 4단계 — 완료 (2026-07-04)
+- `archiver` 기반 zip 압축 구현.
+  - [main.js](main.js): `createZipArchive(sourcePaths, outputZipPath)` 추가, `ipcMain.handle('compress-paths', ...)`에서
+    1) `normalizePaths`로 먼저 NFC 정규화 → 2) `dialog.showSaveDialog`로 저장 위치를 사용자가 직접 선택
+    (기본 파일명은 항목이 1개면 `<이름>.zip`, 여러 개면 `압축.zip`, 기본 위치는 첫 항목의 부모 폴더) →
+    3) 압축 진행. 사용자가 저장 다이얼로그에서 취소하면 `{ cancelled: true }`로 응답.
+  - [preload.js](preload.js)에 `compressPaths` 추가.
+  - [renderer.js](renderer.js): "정리해서 압축하기" 버튼 활성화, 클릭 시 `window.api.compressPaths(currentPaths)` 호출,
+    결과(취소/저장 경로/성공·실패 목록)를 상태 영역에 표시.
+- **검수 중 발견/수정한 버그**: "파일명만 정리하기"로 먼저 이름을 바꾼 뒤 이어서 "정리해서 압축하기"를
+  누르면, main 프로세스는 이미 실제 파일명을 바꿔놨는데 렌더러가 들고 있는 `currentPaths`는 여전히
+  옛날(정규화 전) 경로 문자열이라 다음 호출이 존재하지 않는 경로를 참조하게 되는 문제가 있었음.
+  → 정규화/압축 IPC 응답을 받을 때마다 `syncCurrentPathsWithResult`로 화면이 들고 있는 경로 목록을
+  실제 최종 경로로 갱신하도록 수정.
+- **핵심 요구사항(zip UTF-8 플래그) 저수준 검증**: `archiver`/`compress-commons` 소스를 직접 확인한 결과,
+  엔트리 이름을 `Buffer.byteLength(name) !== name.length`로 검사해서 비ASCII 문자가 있으면
+  자동으로 General Purpose Bit 11(UTF-8 플래그)을 세우는 것을 확인함 (별도 옵션 설정 불필요).
+  실제로 한글 파일이 섞인 zip을 만들어 Python `zipfile`의 `ZipInfo.flag_bits`로 직접 검사한 결과:
+  - 한글 파일/폴더 엔트리 → `utf8_flag=True`
+  - ASCII 전용 엔트리 → `utf8_flag=False` (불필요한 플래그를 안 세워서 정상)
+  - 모든 엔트리 이름이 NFC로 정규화되어 있음을 확인 (정규화 → 압축 순서가 올바르게 적용됨)
+- **검수**: `node --check`로 세 파일 문법 확인, 실제 `electron .`을 백그라운드로 띄워 새 IPC 핸들러가
+  추가된 상태에서도 크래시 없이 기동하는 것 확인 후 종료.
+  단, `dialog.showSaveDialog`는 사용자 상호작용이 필요한 네이티브 UI라 자동화로 끝까지 클릭할 수 없어,
+  실제 압축 파일 저장 및 (가능하다면) 윈도우에서 압축 해제해 한글 파일명이 정상인지는 사용자 확인이 필요함.
