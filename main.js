@@ -127,7 +127,52 @@ function createZipArchive(sourcePaths, outputZipPath) {
   });
 }
 
-module.exports = { normalizeOneName, normalizeRecursiveSync, normalizePaths, createZipArchive };
+/**
+ * 압축 저장 경로가 압축 대상(원본) 항목과 실제로 같은 파일/폴더를 가리키는지 확인한다.
+ * 같으면 그대로 진행 시 fs.createWriteStream이 원본을 열자마자 비워버려서(truncate)
+ * archiver가 그 원본을 읽으려 할 때 이미 내용이 사라진 상태가 되어 데이터가 손상된다.
+ *
+ * @param {string} outputPath
+ * @param {string[]} sourcePaths
+ * @returns {string|null} 충돌한 원본 경로, 없으면 null
+ */
+function findOutputCollision(outputPath, sourcePaths) {
+  // 케이스 1: outputPath가 이미 존재하는 원본 파일과 완전히 같은 항목을 가리킴.
+  // (APFS는 NFC/NFD, 대소문자를 구분하지 않고 같은 항목으로 취급하므로 dev+ino로 비교해야 정확하다)
+  if (fs.existsSync(outputPath)) {
+    const outStat = fs.lstatSync(outputPath);
+    for (const src of sourcePaths) {
+      if (!fs.existsSync(src)) continue;
+      const srcStat = fs.lstatSync(src);
+      if (srcStat.dev === outStat.dev && srcStat.ino === outStat.ino) {
+        return src;
+      }
+    }
+  }
+
+  // 케이스 2: outputPath가 압축 대상 폴더 자기 자신이거나 그 내부임 (자기 참조).
+  const outputResolved = path.resolve(outputPath);
+  for (const src of sourcePaths) {
+    const srcResolved = path.resolve(src);
+    const stat = fs.lstatSync(src);
+    if (stat.isDirectory()) {
+      const withSep = srcResolved.endsWith(path.sep) ? srcResolved : srcResolved + path.sep;
+      if (outputResolved === srcResolved || outputResolved.startsWith(withSep)) {
+        return src;
+      }
+    }
+  }
+
+  return null;
+}
+
+module.exports = {
+  normalizeOneName,
+  normalizeRecursiveSync,
+  normalizePaths,
+  createZipArchive,
+  findOutputCollision,
+};
 
 // ---- Electron 부트스트랩 (electron . 으로 실행될 때만 동작) ----
 let mainWindow = null;
@@ -157,9 +202,11 @@ if (app) {
     }
 
     const firstDir = path.dirname(successes[0].finalPath);
+    // 압축 대상 파일과 이름이 겹치지 않도록 "(압축)" 접미사를 붙인다.
+    // (예: "문서.zip"을 압축하면 기본 제안값이 "문서.zip"이 되어 원본을 덮어쓸 뻔한 사고가 있었음)
     const suggestedName =
       successes.length === 1
-        ? `${path.parse(successes[0].finalPath).name}.zip`
+        ? `${path.parse(successes[0].finalPath).name} (압축).zip`
         : '압축.zip';
 
     const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
@@ -172,11 +219,18 @@ if (app) {
       return { cancelled: true, savedTo: null, successes, errors };
     }
 
+    const sourcePaths = successes.map((s) => s.finalPath);
+    const collision = findOutputCollision(filePath, sourcePaths);
+    if (collision) {
+      errors.push({
+        path: filePath,
+        message: `저장 위치가 압축 대상("${collision}")과 같은 항목입니다. 원본이 손상될 수 있어 압축을 진행하지 않았습니다. 다른 이름이나 위치를 선택해주세요.`,
+      });
+      return { cancelled: false, savedTo: null, successes, errors };
+    }
+
     try {
-      await createZipArchive(
-        successes.map((s) => s.finalPath),
-        filePath
-      );
+      await createZipArchive(sourcePaths, filePath);
       return { cancelled: false, savedTo: filePath, successes, errors };
     } catch (err) {
       errors.push({ path: filePath, message: `압축 실패: ${err.message}` });
