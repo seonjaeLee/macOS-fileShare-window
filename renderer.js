@@ -5,6 +5,9 @@ const fileListEl = document.getElementById('fileList');
 const normalizeBtn = document.getElementById('normalizeBtn');
 const zipBtn = document.getElementById('zipBtn');
 const statusEl = document.getElementById('status');
+const resetRow = document.getElementById('resetRow');
+const resetBtn = document.getElementById('resetBtn');
+const compatWarning = document.getElementById('compatWarning');
 
 let currentPaths = [];
 
@@ -42,6 +45,8 @@ dropzone.addEventListener('drop', (e) => {
 
   renderFileList();
   clearStatus();
+  resetRow.hidden = false;
+  compatWarning.textContent = '';
 });
 
 function renderFileList() {
@@ -121,10 +126,42 @@ function renderCompressResult(result) {
   setStatus(header + lines.join('\n'));
 }
 
+/**
+ * @returns {Promise<boolean>} 윈도우 호환성 문제가 있으면 true (경고 텍스트도 갱신함)
+ */
+async function updateCompatWarning() {
+  if (currentPaths.length === 0) {
+    compatWarning.textContent = '';
+    return false;
+  }
+  const { longPathCount, nodeModulesDirs } = await window.api.checkWindowsCompat(currentPaths);
+  const hasIssue = nodeModulesDirs.length > 0 || longPathCount > 0;
+  compatWarning.textContent = hasIssue
+    ? '최대 경로표시 문자가 200자를 넘지 않도록 해주세요.\n윈도우에서 압축 해제를 할 수 없게 됩니다.'
+    : '';
+  return hasIssue;
+}
+
+resetBtn.addEventListener('click', () => {
+  currentPaths = [];
+  renderFileList();
+  clearStatus();
+  resetRow.hidden = true;
+  compatWarning.textContent = '';
+});
+
 normalizeBtn.addEventListener('click', async () => {
   if (currentPaths.length === 0) return;
 
   setButtonsDisabled(true);
+  setStatus('호환성 확인 중...');
+  const hasIssue = await updateCompatWarning();
+  if (hasIssue) {
+    setStatus('문제를 해결한 뒤 다시 시도해주세요.');
+    setButtonsDisabled(false);
+    return;
+  }
+
   setStatus('파일명 정리 중...');
 
   try {
@@ -142,6 +179,14 @@ zipBtn.addEventListener('click', async () => {
   if (currentPaths.length === 0) return;
 
   setButtonsDisabled(true);
+  setStatus('호환성 확인 중...');
+  const hasIssue = await updateCompatWarning();
+  if (hasIssue) {
+    setStatus('문제를 해결한 뒤 다시 시도해주세요.');
+    setButtonsDisabled(false);
+    return;
+  }
+
   setStatus('파일명 정리 후 압축 중...');
 
   try {

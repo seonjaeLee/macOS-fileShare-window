@@ -17,8 +17,13 @@
     <ul id="fileList" class="file-list"></ul>
 
     <div class="actions">
-      <button id="normalizeBtn" disabled>파일명만 정리하기</button>
-      <button id="zipBtn" disabled>정리해서 압축하기</button>
+      <button id="normalizeBtn" disabled>파일명만 정리</button>
+      <button id="zipBtn" disabled>정리해서 압축</button>
+    </div>
+
+    <div class="reset-row" id="resetRow" hidden>
+      <button id="resetBtn" class="btn-secondary">다른 파일 정리</button>
+      <span id="compatWarning" class="compat-warning"></span>
     </div>
 
     <pre id="status" class="status"></pre>

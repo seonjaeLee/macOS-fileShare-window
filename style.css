@@ -28,6 +28,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
@@ -100,6 +104,22 @@ h1 {
   margin-top: 16px;
 }
 
+.reset-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.compat-warning {
+  flex: 1;
+  font-size: 12px;
+  color: var(--danger);
+  text-align: right;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
 button {
   flex: 1;
   padding: 10px 14px;
@@ -110,6 +130,18 @@ button {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
+}
+
+.btn-secondary {
+  flex: none;
+  width: fit-content;
+  background: var(--panel);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.btn-secondary:hover {
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
 }
 
 button:disabled {

@@ -16,6 +16,7 @@ function getPathForFile(file) {
 
 contextBridge.exposeInMainWorld('api', {
   getPathForFile,
+  checkWindowsCompat: (paths) => ipcRenderer.invoke('check-windows-compat', paths),
   normalizePaths: (paths) => ipcRenderer.invoke('normalize-paths', paths),
   compressPaths: (paths) => ipcRenderer.invoke('compress-paths', paths),
 });

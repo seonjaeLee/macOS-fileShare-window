@@ -170,12 +170,49 @@ function findOutputCollision(outputPath, sourcePaths) {
   return null;
 }
 
+/**
+ * 드래그된 경로들을 재귀 스캔해서 윈도우 호환성 문제가 될 수 있는 항목을 찾는다.
+ * - node_modules 폴더: 안으로 재귀하지 않고 폴더 자체를 기록 (수만 파일 스캔 방지)
+ * - 경로 길이 200자 이상: 윈도우 MAX_PATH(260) 초과 위험
+ *
+ * @param {string[]} inputPaths
+ * @returns {{ longPathCount: number, nodeModulesDirs: string[] }}
+ */
+function checkWindowsCompat(inputPaths) {
+  let longPathCount = 0;
+  const nodeModulesDirs = [];
+
+  function scan(p) {
+    try {
+      if (p.length >= 200) longPathCount++;
+      const stat = fs.lstatSync(p);
+      if (!stat.isDirectory()) return;
+      if (path.basename(p) === 'node_modules') {
+        nodeModulesDirs.push(p);
+        return; // 안으로 재귀하지 않는다
+      }
+      for (const entry of fs.readdirSync(p)) {
+        scan(path.join(p, entry));
+      }
+    } catch (_) {
+      // 읽기 권한 없는 항목 등은 조용히 무시
+    }
+  }
+
+  for (const p of inputPaths) {
+    scan(p);
+  }
+
+  return { longPathCount, nodeModulesDirs };
+}
+
 module.exports = {
   normalizeOneName,
   normalizeRecursiveSync,
   normalizePaths,
   createZipArchive,
   findOutputCollision,
+  checkWindowsCompat,
 };
 
 // ---- Electron 부트스트랩 (electron . 으로 실행될 때만 동작) ----
@@ -195,6 +232,8 @@ function createWindow() {
 }
 
 if (app) {
+  ipcMain.handle('check-windows-compat', (event, inputPaths) => checkWindowsCompat(inputPaths));
+
   ipcMain.handle('normalize-paths', (event, inputPaths) => normalizePaths(inputPaths));
 
   ipcMain.handle('compress-paths', async (event, inputPaths) => {
