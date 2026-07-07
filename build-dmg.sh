@@ -12,6 +12,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 OUT_DIR="dist"
+ASCII_BASE="$(basename "$(pwd)")"
 
 shopt -s nullglob
 APPS=("$OUT_DIR"/*.app)
@@ -27,7 +28,14 @@ make_dmg() {
   local app_base
   app_base="$(basename "$app_path" .app)"
   local volname="$app_base"
-  local final_dmg="$OUT_DIR/$app_base.dmg"
+  # GitHub Release 첨부파일은 비ASCII(한글) 파일명을 지원하지 않아 업로드 시 이름이
+  # 깨지므로(예: "default.dmg"), 배포용 .dmg 파일명은 영문(ASCII)으로 만든다.
+  # 단, 마운트했을 때 Finder에 보이는 볼륨 이름(volname)은 한글 그대로 유지해 사용성은 지킨다.
+  local asset_name="$ASCII_BASE"
+  if [[ "$app_base" == *"Intel"* ]]; then
+    asset_name="${ASCII_BASE}-intel"
+  fi
+  local final_dmg="$OUT_DIR/$asset_name.dmg"
   local staging
   staging="$(mktemp -d)"
 
