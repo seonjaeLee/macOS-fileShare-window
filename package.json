@@ -4,10 +4,13 @@
   "description": "맥에서 만든 한글 파일명을 윈도우 호환(NFC) 형태로 정규화하고 UTF-8 플래그가 있는 zip으로 압축하는 로컬 전용 Electron 앱",
   "main": "main.js",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "start": "electron .",
     "test:normalize": "node main.js",
-    "dist": "./build-app.sh"
+    "dist": "./build-app.sh",
+    "dist:dmg": "./build-app.sh && ./build-dmg.sh",
+    "dist:all": "./build-app.sh arm64 x64 && ./build-dmg.sh"
   },
   "devDependencies": {
     "electron": "^43.0.0"

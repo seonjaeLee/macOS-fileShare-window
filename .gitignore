@@ -5,3 +5,4 @@ out/
 .DS_Store
 test-fixture/
 build/AppIcon.iconset/
+.claude/
